@@ -6,7 +6,10 @@ authors = ["Anderson Cancado <andycancado@gmail.com>"]
 
 [dependencies]
 clap = { version = "4.5.6", features = ["derive"] }
+color-eyre = "0.6.3"
+crossterm = "0.27.0"
 futures = "0.3.30"
+ratatui = "0.26.3"
 signal-hook = "0.3.17"
 signal-hook-tokio = "0.3.1"
 tokio = { version = "1.38.0", features = ["full"] }
