@@ -52,7 +52,7 @@ async fn create_ssh_tunnel(
     }
 }
 
-async fn handle_signals(tx: mpsc::Sender<()>) {
+async fn handle_signals(tx: Arc<mpsc::Sender<()>>) {
     let mut sigint =
         signal(SignalKind::interrupt()).expect("Failed to create SIGINT signal handler");
     let mut sigterm =
@@ -109,7 +109,8 @@ async fn main() -> Result<()> {
     let args = args.unwrap();
     let host = args.host;
     let (tx, rx) = mpsc::channel(1);
-    let _ = handle_signals(tx).await;
+    let sender = Arc::new(tx);
+    handle_signals(sender.clone()).await;
     let shutdown_receiver = Arc::new(Mutex::new(rx));
     let tunnel_tasks: Vec<_> = args
         .ports
@@ -145,7 +146,7 @@ async fn main() -> Result<()> {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     stdout().execute(LeaveAlternateScreen)?;
                     disable_raw_mode()?;
-                    tasks.await;
+                    // tasks.await;
                     // std::mem::drop(tasks);
                     break;
                 }
@@ -153,5 +154,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    let _ = sender.send(()).await;
+    tasks.await;
     Ok(())
 }
