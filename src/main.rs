@@ -37,7 +37,6 @@ async fn create_ssh_tunnel(
         "ssh -N -T -L {}:127.0.0.1:{} {}",
         local_port, remote_port, host
     );
-    println!("Running: {}", ssh_command);
     let mut process = Command::new("sh")
         .arg("-c")
         .arg(&ssh_command)
@@ -52,7 +51,7 @@ async fn create_ssh_tunnel(
     }
 }
 
-async fn handle_signals(tx: Arc<mpsc::Sender<()>>) {
+async fn handle_signals(tx: Arc<Mutex<mpsc::Sender<()>>>) {
     let mut sigint =
         signal(SignalKind::interrupt()).expect("Failed to create SIGINT signal handler");
     let mut sigterm =
@@ -62,11 +61,11 @@ async fn handle_signals(tx: Arc<mpsc::Sender<()>>) {
         tokio::select! {
             _ = sigint.recv() => {
                 println!("Received SIGINT");
-                let _ = tx.send(()).await;
+                let _ = tx.lock().await.send(()).await;
             },
             _ = sigterm.recv() => {
                 println!("Received SIGTERM");
-                let _ = tx.send(()).await;
+                let _ = tx.lock().await.send(()).await;
             }
         }
     });
@@ -109,23 +108,25 @@ async fn main() -> Result<()> {
     let args = args.unwrap();
     let host = args.host;
     let (tx, rx) = mpsc::channel(1);
-    let sender = Arc::new(tx);
+    let sender = Arc::new(Mutex::new(tx));
     handle_signals(sender.clone()).await;
     let shutdown_receiver = Arc::new(Mutex::new(rx));
-    let tunnel_tasks: Vec<_> = args
-        .ports
-        .iter()
-        .map(|&port| {
-            let shutdown_receiver = shutdown_receiver.clone();
-            create_ssh_tunnel(port, port, &host, shutdown_receiver)
-        })
-        .collect();
     let ports = args
         .ports
         .iter()
         .map(|&s| s.to_string())
         .collect::<Vec<String>>();
-    let tasks = join_all(tunnel_tasks);
+    let j = tokio::spawn(async move {
+        let tunnel_tasks: Vec<_> = args
+            .ports
+            .iter()
+            .map(|&port| {
+                let shutdown_receiver = shutdown_receiver.clone();
+                create_ssh_tunnel(port, port, &host, shutdown_receiver)
+            })
+            .collect();
+        join_all(tunnel_tasks).await;
+    });
     loop {
         let _ = terminal.draw(|frame| {
             let area = frame.size();
@@ -146,15 +147,15 @@ async fn main() -> Result<()> {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     stdout().execute(LeaveAlternateScreen)?;
                     disable_raw_mode()?;
-                    // tasks.await;
-                    // std::mem::drop(tasks);
                     break;
                 }
             }
         }
     }
 
-    let _ = sender.send(()).await;
-    tasks.await;
+    for _ in ports.iter() {
+        let _ = sender.lock().await.send(()).await;
+    }
+    j.await?;
     Ok(())
 }
