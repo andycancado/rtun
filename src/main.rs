@@ -43,17 +43,16 @@ async fn create_ssh_tunnel(
         .arg(&ssh_command)
         .spawn()
         .expect("Failed to spawn process");
-    let mut x = shutdown.lock().await;
+    let mut rx = shutdown.lock().await;
     tokio::select! {
-        _ = x.recv() => {
+        _ = rx.recv() => {
             println!("Terminating SSH tunnel on port {}", local_port);
             let _ = process.kill().await;
         }
     }
 }
 
-async fn handle_signals() -> mpsc::Receiver<()> {
-    let (sender, receiver) = mpsc::channel(1);
+async fn handle_signals(tx: mpsc::Sender<()>) {
     let mut sigint =
         signal(SignalKind::interrupt()).expect("Failed to create SIGINT signal handler");
     let mut sigterm =
@@ -63,16 +62,14 @@ async fn handle_signals() -> mpsc::Receiver<()> {
         tokio::select! {
             _ = sigint.recv() => {
                 println!("Received SIGINT");
-                let _ = sender.send(()).await;
+                let _ = tx.send(()).await;
             },
             _ = sigterm.recv() => {
                 println!("Received SIGTERM");
-                let _ = sender.send(()).await;
+                let _ = tx.send(()).await;
             }
         }
     });
-
-    receiver
 }
 
 fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
@@ -103,32 +100,29 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     terminal.clear()?;
 
-    let args = Args::try_parse();
-    match args {
-        Ok(_) => {}
-        Err(e) => {
-            stdout().execute(LeaveAlternateScreen)?;
-            disable_raw_mode()?;
-            println!("{}", e);
-            std::process::exit(1);
-        }
-    }
+    let args = Args::try_parse().map_err(|err| {
+        stdout().execute(LeaveAlternateScreen).unwrap();
+        disable_raw_mode().unwrap();
+        println!("{}", err);
+        std::process::exit(1);
+    });
     let args = args.unwrap();
     let host = args.host;
-    let shutdown_receiver = handle_signals().await;
-    let s: Arc<Mutex<mpsc::Receiver<()>>> = Arc::new(Mutex::new(shutdown_receiver));
+    let (tx, rx) = mpsc::channel(1);
+    let _ = handle_signals(tx).await;
+    let shutdown_receiver = Arc::new(Mutex::new(rx));
     let tunnel_tasks: Vec<_> = args
         .ports
         .iter()
         .map(|&port| {
-            let shutdown_receiver = s.clone();
+            let shutdown_receiver = shutdown_receiver.clone();
             create_ssh_tunnel(port, port, &host, shutdown_receiver)
         })
         .collect();
     let ports = args
         .ports
         .iter()
-        .map(|&x| x.to_string())
+        .map(|&s| s.to_string())
         .collect::<Vec<String>>();
     let tasks = join_all(tunnel_tasks);
     loop {
@@ -151,7 +145,8 @@ async fn main() -> Result<()> {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     stdout().execute(LeaveAlternateScreen)?;
                     disable_raw_mode()?;
-                    std::mem::drop(tasks);
+                    tasks.await;
+                    // std::mem::drop(tasks);
                     break;
                 }
             }
