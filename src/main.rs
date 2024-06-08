@@ -109,14 +109,14 @@ async fn main() -> Result<()> {
     let host = args.host;
     let (tx, rx) = mpsc::channel(1);
     let sender = Arc::new(Mutex::new(tx));
-    handle_signals(sender.clone()).await;
     let shutdown_receiver = Arc::new(Mutex::new(rx));
+    handle_signals(sender.clone()).await;
     let ports = args
         .ports
         .iter()
         .map(|&s| s.to_string())
         .collect::<Vec<String>>();
-    let j = tokio::spawn(async move {
+    let jh = tokio::spawn(async move {
         let tunnel_tasks: Vec<_> = args
             .ports
             .iter()
@@ -156,6 +156,6 @@ async fn main() -> Result<()> {
     for _ in ports.iter() {
         let _ = sender.lock().await.send(()).await;
     }
-    j.await?;
+    jh.await?;
     Ok(())
 }

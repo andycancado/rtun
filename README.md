@@ -1,3 +1,5 @@
+<p align="center"> <img src="https://i.ibb.co/GRkCKJV/rtun-logo2-transformed.png"/></p>
+
 # SSH Tunnel CLI
 
 A simple command-line tool written in Rust to create SSH tunnels.
