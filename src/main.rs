@@ -134,8 +134,8 @@ async fn main() -> Result<()> {
     loop {
         let _ = terminal.draw(|frame| {
             let area = frame.size();
-            let items = ports.clone();
-            let items = items.iter().map(|t| format!("PORTS >>>> {}", t)); // Fixme: fix this clone
+            let items = &ports;
+            let items = items.iter().map(|t| format!("PORTS >>>> {}", t));
             let list = List::new(items)
                 .block(Block::bordered().title("Rtun - SSH Tunnel Manager (hit q to quit)"))
                 .style(Style::default().fg(Color::White))
