@@ -27,21 +27,13 @@ A simple command-line tool written in Rust to create SSH tunnels.
 Run the CLI with the desired ports, user, and host:
 
 ```sh
-Usage: rtun [OPTIONS] <PORTS>...
+Usage: rtun 
 
-Arguments:
-  <PORTS>...  List of ports to tunnel
-
-Options:
-      --user <USER>  Remote user [default: user]
-      --host <HOST>  Remote host [default: localhost]
-  -h, --help         Print help information
-  -V, --version      Print version information
 ```
 
 Example:
 ```sh
-cargo run --release -- 11434 10600 8088 --user user --host localhost
+cargo run --release 
 ```
 
 Build:
@@ -50,32 +42,6 @@ cargo build --release
 ```
 
 This command will set up SSH tunnels for the specified ports and block the terminal until you press `Ctrl+C`.
-
-## Example
-
-### Creating SSH Tunnels
-
-To create SSH tunnels for ports 11434, 10600, and 8088 with user `user` and host `localhost`:
-
-```sh
-cargo run --release -- 11434 10600 8088 --user user --host localhost
-```
-
-### Using Default User and Host
-
-The following command will use the default user (`user`) and host (`localhost`) for the specified ports:
-
-```sh
-cargo run --release -- 11434 10600 8088
-```
-
-### Specifying User and Host
-
-You can override the defaults with the `--user` and `--host` options:
-
-```sh
-cargo run --release -- 11434 10600 8088 --user newuser --host 192.168.1.100
-```
 
 ## Graceful Shutdown
 
